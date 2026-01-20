@@ -4,6 +4,7 @@ export interface Word {
   hebrew: string;
   french: string;
   category: 'Nom' | 'Verbe' | 'Adjectif' | 'Divers';
+  lesson: number; // מאפשר לסנן מילים לפי שיעור
 }
 
 export type GameState = 'START' | 'PLAYING' | 'FINISHED' | 'LEXICON';

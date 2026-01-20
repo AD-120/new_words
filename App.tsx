@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { GameState, Question, Word } from './types';
 import { VOCABULARY, COLORS } from './constants';
 import { audioService } from './services/audioService';
@@ -22,7 +22,9 @@ const Flashcard: React.FC<{ word: Word }> = ({ word }) => {
         </div>
       ) : (
         <div className="flex flex-col text-center w-full py-4">
-          <span className="text-[10px] font-black uppercase opacity-50 mb-2 tracking-widest">{word.category}</span>
+          <div className="flex justify-center gap-2 mb-2">
+            <span className="text-[10px] font-black uppercase opacity-50 tracking-widest">{word.category}</span>
+          </div>
           <span className="text-3xl font-black text-black mb-1">{word.french}</span>
           <span className="text-[10px] font-black uppercase opacity-30 mt-4 tracking-widest italic">Cliquez pour masquer</span>
         </div>
@@ -39,14 +41,25 @@ const App: React.FC = () => {
   const [feedback, setFeedback] = useState<{ isCorrect: boolean; show: boolean } | null>(null);
   const [useTimer, setUseTimer] = useState(false);
   const [timeLeft, setTimeLeft] = useState(6);
+  const [selectedLesson, setSelectedLesson] = useState<number | 'ALL'>(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Get dynamic list of lessons from vocabulary
+  const lessonsList = useMemo(() => {
+    const lessons = [...new Set(VOCABULARY.map(w => w.lesson))].sort((a, b) => a - b);
+    return lessons;
+  }, []);
 
   const shuffle = <T,>(array: T[]): T[] => {
     return [...array].sort(() => Math.random() - 0.5);
   };
 
   const createGameQuestions = useCallback(() => {
-    const shuffledWords = shuffle(VOCABULARY);
+    const pool = selectedLesson === 'ALL' 
+      ? VOCABULARY 
+      : VOCABULARY.filter(w => w.lesson === selectedLesson);
+      
+    const shuffledWords = shuffle(pool);
     return shuffledWords.map((word) => {
       const otherOptions = VOCABULARY
         .filter((w) => w.id !== word.id)
@@ -60,10 +73,11 @@ const App: React.FC = () => {
         correctAnswer: word.french
       };
     });
-  }, []);
+  }, [selectedLesson]);
 
   const startGame = () => {
     const newQs = createGameQuestions();
+    if (newQs.length === 0) return;
     setQuestions(newQs);
     setCurrentIdx(0);
     setScore(0);
@@ -120,10 +134,29 @@ const App: React.FC = () => {
     };
   }, [gameState, useTimer, feedback, handleAnswer]);
 
+  const LessonSelector = ({ className = "" }: { className?: string }) => (
+    <div className={`relative ${className}`}>
+      <select 
+        value={selectedLesson}
+        onChange={(e) => setSelectedLesson(e.target.value === 'ALL' ? 'ALL' : parseInt(e.target.value))}
+        className="w-full neo-border neo-shadow-sm p-4 bg-white font-black text-xl appearance-none cursor-pointer focus:outline-none focus:bg-gray-50 active-press"
+      >
+        <option value="ALL">TOUS LES COURS</option>
+        {lessonsList.map(num => (
+          <option key={num} value={num}>COURS {num}</option>
+        ))}
+      </select>
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 7L10 12L15 7" stroke="black" strokeWidth="3" strokeLinecap="square"/>
+        </svg>
+      </div>
+    </div>
+  );
+
   const renderStart = () => (
     <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
-      {/* Title Box with Offset Black Background */}
-      <div className="relative mb-12 max-w-lg w-full">
+      <div className="relative mb-10 max-w-lg w-full">
         <div className="absolute inset-0 bg-black translate-x-3 translate-y-3 rotate-[1deg]"></div>
         <BrutalistBox color={COLORS.secondary} className="relative z-10 rotate-[-1deg] py-10 px-4 w-full">
           <h1 className="text-6xl md:text-8xl font-black mb-4 uppercase tracking-tighter text-black leading-none">HÉBREU FLASH</h1>
@@ -131,89 +164,94 @@ const App: React.FC = () => {
         </BrutalistBox>
       </div>
       
+      {/* Dynamic Lesson Selector Dropdown */}
+      <div className="mb-10 w-full max-w-md text-left">
+        <div className="text-xs font-black uppercase mb-3 ml-1 tracking-[0.2em] opacity-60">CHOISIR LE COURS</div>
+        <LessonSelector />
+      </div>
+      
       <div className="flex flex-col gap-0 w-full max-w-md items-center">
-        {/* Play Button and Timer Row */}
-        <div className="flex flex-row items-center gap-4 w-full mb-8 z-20">
+        <div className="flex flex-row items-center gap-4 w-full mb-8 z-20 max-w-xs sm:max-w-md">
           <BrutalistBox 
             color={COLORS.accent} 
             hoverable 
             onClick={startGame}
-            className="text-2xl md:text-3xl px-8 py-8 rotate-[1deg] text-center flex-[2]"
+            className="text-xl md:text-3xl px-4 sm:px-8 py-6 sm:py-8 rotate-[1deg] text-center flex-[3]"
           >
             JOUER MAINTENANT
           </BrutalistBox>
 
           <div 
             onClick={() => setUseTimer(!useTimer)}
-            className="flex flex-row items-center gap-3 cursor-pointer group bg-white neo-border p-3 neo-shadow-sm rotate-[-1deg] hover:bg-gray-50 transition-colors"
+            className="flex flex-row items-center gap-2 sm:gap-3 cursor-pointer group bg-white neo-border p-2 sm:p-3 neo-shadow-sm rotate-[-1deg] hover:bg-gray-50 transition-colors flex-1 min-w-[80px] sm:min-w-[120px]"
           >
-            <div className="w-10 h-10 neo-border bg-white flex items-center justify-center transition-all shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 neo-border bg-white flex items-center justify-center transition-all shrink-0">
               {useTimer && (
-                <span className="text-red-600 text-3xl font-black select-none leading-none" style={{ transform: 'translateY(-2px)' }}>
+                <span className="text-red-600 text-2xl sm:text-3xl font-black select-none leading-none" style={{ transform: 'translateY(-2px)' }}>
                   V
                 </span>
               )}
             </div>
             <div className="flex flex-col text-left">
-              <span className="font-black uppercase text-[10px] tracking-[0.1em] text-black leading-tight">CHRONO</span>
-              <span className="font-black uppercase text-[10px] tracking-[0.1em] text-black leading-tight">6 SEC.</span>
+              <span className="font-black uppercase text-[8px] sm:text-[10px] tracking-[0.05em] text-black leading-tight">TIMER</span>
+              <span className="font-black uppercase text-[8px] sm:text-[10px] tracking-[0.05em] text-black leading-tight">6s</span>
             </div>
           </div>
         </div>
 
-        {/* List Button inside Black Block Container */}
-        <div className="bg-black p-4 w-full max-w-xs rotate-[-1deg] neo-shadow pt-10">
+        <div className="bg-black p-4 w-full max-w-[280px] sm:max-w-xs rotate-[-1deg] neo-shadow pt-10">
            <div 
             onClick={() => setGameState('LEXICON')}
             className="bg-white neo-border p-5 cursor-pointer hover:bg-gray-100 transition-colors text-center"
            >
-              <span className="text-2xl font-black uppercase tracking-tighter text-black">LISTE DES MOTS</span>
+              <span className="text-xl sm:text-2xl font-black uppercase tracking-tighter text-black">LISTE DES MOTS</span>
            </div>
         </div>
       </div>
     </div>
   );
 
-  const renderLexicon = () => (
-    <div className="p-6 max-w-2xl mx-auto mb-20">
-      <div className="flex items-center justify-between mb-8 sticky top-[88px] bg-[#FFF4E0] py-4 z-10 border-b-8 border-black">
-        <BrutalistBox 
-          color={COLORS.secondary} 
-          hoverable 
-          onClick={() => setGameState('START')}
-          className="py-2 px-6 mr-4"
-        >
-          RETOUR
-        </BrutalistBox>
-        <h2 className="text-4xl md:text-5xl font-black text-black leading-none uppercase tracking-tighter text-right">
-          DICTIONNAIRE<br/>
-          <span className="text-3xl">({VOCABULARY.length})</span>
-        </h2>
+  const renderLexicon = () => {
+    const filteredLexicon = selectedLesson === 'ALL' 
+      ? VOCABULARY 
+      : VOCABULARY.filter(w => w.lesson === selectedLesson);
+
+    return (
+      <div className="p-6 max-w-2xl mx-auto mb-20">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 sticky top-[88px] bg-[#FFF4E0] py-4 z-10 border-b-8 border-black gap-4">
+          <h2 className="text-2xl md:text-3xl font-black text-black leading-none uppercase tracking-tighter text-left">
+            DICTIONNAIRE<br/>
+            <span className="text-xl">({filteredLexicon.length} MOTS)</span>
+          </h2>
+          <div className="w-full sm:w-64">
+             <LessonSelector />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-8">
+          {filteredLexicon.map((word) => (
+            <Flashcard key={word.id} word={word} />
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-8">
-        {VOCABULARY.map((word) => (
-          <Flashcard key={word.id} word={word} />
-        ))}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderGame = () => {
     if (questions.length === 0 || !questions[currentIdx]) return null;
     const current = questions[currentIdx];
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 max-w-2xl mx-auto">
-        <div className="w-full flex justify-between items-center mb-8 gap-4">
-          <BrutalistBox color="white" className="py-2 px-4 text-xl flex-1 text-center">
-            {currentIdx + 1} / {questions.length}
-          </BrutalistBox>
-          {useTimer && (
-            <BrutalistBox color={timeLeft <= 2 ? COLORS.error : 'white'} className="py-2 px-6 text-2xl font-black animate-pulse">
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 max-w-2xl mx-auto relative">
+        {useTimer && (
+          <div className="fixed top-24 right-4 z-40 rotate-[3deg]">
+            <BrutalistBox color={timeLeft <= 2 ? COLORS.error : 'white'} className="py-2 px-6 text-3xl font-black animate-pulse neo-shadow-lg">
               {timeLeft}s
             </BrutalistBox>
-          )}
-          <BrutalistBox color={COLORS.secondary} className="py-2 px-4 text-xl flex-1 text-center">
+          </div>
+        )}
+
+        <div className="w-full flex justify-center items-center mb-8 gap-4">
+          <BrutalistBox color={COLORS.secondary} className="py-2 px-8 text-xl text-center min-w-[200px]">
             SCORE: {score}
           </BrutalistBox>
         </div>
@@ -298,30 +336,26 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <header className="p-6 flex justify-between items-center border-b-8 border-black bg-white sticky top-0 z-30">
+      <header className="p-6 flex justify-between items-center border-b-8 border-black bg-white sticky top-0 z-50">
         <div 
-          className="font-black text-3xl md:text-4xl tracking-tighter cursor-pointer hover:skew-x-2 transition-transform select-none lowercase"
+          className="font-black text-3xl md:text-4xl tracking-tighter cursor-pointer hover:skew-x-2 transition-transform select-none"
           onClick={() => setGameState('START')}
         >
-          ulpan<span className="text-pink-500">.</span>avi
+          Ulpan<span className="text-pink-500">.</span>Go
         </div>
         <div className="flex items-center gap-4">
            <div className="hidden sm:block font-black text-sm bg-black text-white px-3 py-1 rotate-[-2deg]">
-             HEBREW LEARN
+             {selectedLesson === 'ALL' ? 'TOUS LES COURS' : `COURS ${selectedLesson}`}
            </div>
         </div>
       </header>
       
-      <main className="container mx-auto pb-24 pt-8">
+      <main className="container mx-auto pb-12 pt-8">
         {gameState === 'START' && renderStart()}
         {gameState === 'LEXICON' && renderLexicon()}
         {gameState === 'PLAYING' && renderGame()}
         {gameState === 'FINISHED' && renderFinished()}
       </main>
-
-      <footer className="fixed bottom-0 w-full p-4 text-center text-sm font-black border-t-8 border-black bg-white z-30 uppercase tracking-widest">
-        NÉO-BRUTALISME x HÉBREU &copy; 2024
-      </footer>
     </div>
   );
 };
